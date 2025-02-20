@@ -1,91 +1,132 @@
 from tkinter import *
 from tkinter import messagebox, ttk
 import subprocess
-import time
-import tkinter
+import os
 
+# Global variable to control the timer
+stop_timer = False
 
-def notshutdown():
+def cancel_shutdown():
     subprocess.call(["shutdown", "/a"])
-def fullOff():
-    subprocess.call(["shutdown", "/s"])
-def saveprogress():
+
+def shutdown():
+    subprocess.call(["shutdown", "/s", "/f", "/t", "0"])
+
+def hibernate():
     subprocess.call(["shutdown", "/h"])
+
 def restart():
-    subprocess.call(["shutdown", "/r"])
+    subprocess.call(["shutdown", "/r", "/f", "/t", "0"])
 
-def stringvar():
-    my_time = 1800
-    for my_time in range(my_time, 0, -1):
-        seconds = my_time % 60
-        minutes = int(my_time / 60) % 60
-        timer = (f"{minutes:02}:{seconds:02}")
-        Timer.set(timer)
-        print(timer)
-        time.sleep(1)
+def start_timer(duration, callback):
+    """Starts the timer with the given duration in minutes and executes the callback."""
+    global stop_timer
+    stop_timer = False  # Reset stop flag
 
+    def timer_logic(remaining_time):
+        global stop_timer
+        if stop_timer:  # Stop timer if stop flag is set
+            Timer.set("Canceled")
+            return
+        if remaining_time > 0:
+            minutes, seconds = divmod(remaining_time, 60)
+            Timer.set(f"{minutes:02}:{seconds:02}")
+            Main.after(1000, timer_logic, remaining_time - 1)
+        else:
+            callback()
 
+    timer_logic(duration)
 
 def select_time():
-    if not Radio.get():  # if not click radiobutton
-        messagebox.showerror(message="You must entry variant shutdown!")
-    else:
-        variant = Radio.get()
-        if variant == 1:
-            stringvar()
-            saveprogress()
-        if variant == 2:
-            stringvar()
-            fullOff()
-        if variant == 3:
-            stringvar()
+    """Handles the selection of action after the timer ends."""
+    global stop_timer
+    if Radio.get() == 0:  # If no radio button is selected
+        messagebox.showerror("Error", "Please select a shutdown option!")
+        return
+
+    try:
+        time_minutes = int(timeEntry.get())
+        if time_minutes <= 0:
+            raise ValueError
+    except ValueError:
+        messagebox.showerror("Error", "Please enter a valid time in minutes!")
+        return
+
+    duration_seconds = time_minutes * 60
+    option = Radio.get()
+
+    def execute_action():
+        if option == 1:
+            hibernate()
+        elif option == 2:
+            shutdown()
+        elif option == 3:
             restart()
 
+    timeEntry.delete(0, END)  # Clear input field after starting the timer
+    start_timer(duration_seconds, execute_action)
 
-# Start window
-Main = tkinter.Tk()
+def stop_countdown():
+    """Stops the countdown timer."""
+    global stop_timer
+    stop_timer = True
+    cancel_shutdown()
+    Timer.set("Stopped")
+
+# Main window
+Main = Tk()
 Main.title("Windosleep")
 Main.geometry("500x400")
-#Main.iconphoto(False, tkinter.PhotoImage(file='icon.png'))
 Main.configure(bg='#F8F8FF')
 Main.resizable(width=False, height=False)
 
+# Program icon (check if file exists)
+icon_path = "icon.png"
+if os.path.exists(icon_path):
+    Main.iconphoto(False, PhotoImage(file=icon_path))
+
 # Labels
-Label1 = Label(text="Change function", font=("Ivy 12 bold"), bg="#F8F8FF", fg="red")
+Label1 = Label(Main, text="Select an option:", font=("Ivy 12 bold"), bg="#F8F8FF", fg="red")
 Label1.place(x=10, y=1)
 
-Label2 = Label(text="Start time", font=("Ivy 12 bold"), bg="#F8F8FF", fg="red")
+Label2 = Label(Main, text="Enter time (minutes):", font=("Ivy 12 bold"), bg="#F8F8FF", fg="red")
 Label2.place(x=10, y=250)
 
-Label3 = Label(text="This program sets a time - 30 minutes before the function will be executed", bg="#F8F8FF", font=("Arial Rounded MT Bold", 10, ), fg="black")
+Label3 = Label(Main, text="The program will execute the selected action after the timer ends.",
+               bg="#F8F8FF", font=("Arial Rounded MT Bold", 10), fg="black")
 Label3.place(x=9, y=280)
 
-# Radiobuttons
-
+# Radio buttons
 Radio = IntVar()
 
-RadioSave = Radiobutton(text="Save the process and turn off the computer", variable=Radio, bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=1, )
+RadioSave = Radiobutton(Main, text="Hibernate and shut down", variable=Radio, 
+                        bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=1)
 RadioSave.place(x=9, y=30)
 
-RadioFullOff = Radiobutton(text="Do not save the process and turn off the computer", variable=Radio, bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=2)
+RadioFullOff = Radiobutton(Main, text="Shut down without saving", variable=Radio, 
+                           bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=2)
 RadioFullOff.place(x=9, y=60)
 
-RadioRestart = Radiobutton(text="Restart windows", variable=Radio, bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=3)
+RadioRestart = Radiobutton(Main, text="Restart", variable=Radio, 
+                           bg="#F8F8FF", fg="black", font=("Arial Black", 11), value=3)
 RadioRestart.place(x=9, y=90)
 
-# Base button
-But = ttk.Button(text="Start", width=20, command=select_time)
+# Time input field
+timeEntry = ttk.Entry(Main, width=10)
+timeEntry.place(x=200, y=250)
+
+# Start and stop buttons
+But = ttk.Button(Main, text="Start", width=20, command=select_time)
 But.place(x=9, y=340)
 
+StopBut = ttk.Button(Main, text="Cancel", width=20, command=stop_countdown)
+StopBut.place(x=200, y=340)
 
-# Label from time
-Timer = tkinter.StringVar()
-timeLabel = tkinter.Label(Main, textvariable = Timer, font=("Britannic Bold", 11))
+# Timer display
+Timer = StringVar()
+Timer.set("00:00")
+timeLabel = Label(Main, textvariable=Timer, font=("Britannic Bold", 11), bg="#F8F8FF", fg="black")
 timeLabel.place(x=9, y=310)
 
-# Frames
-Frame1 = Frame(Main, width=1000, background="black")
-Frame1.place(x=0, y=180)
-
-
+# Run program
 Main.mainloop()
